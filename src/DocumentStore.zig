@@ -37,7 +37,7 @@ lsp_capabilities: struct {
 } = .{},
 
 /// https://github.com/zigtools/zls/issues/3208
-pub const supports_build_system = false and std.process.can_spawn;
+pub const supports_build_system = bsp.enabled and std.process.can_spawn;
 
 pub const Config = struct {
     environ_map: *const std.process.Environ.Map,

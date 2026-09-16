@@ -9,6 +9,7 @@ const Client = std.zig.Client;
 const Server = std.zig.Server;
 
 const log = std.log.scoped(.bsp);
+pub const enabled = false;
 
 const DiagnosticsCollection = @import("DiagnosticsCollection.zig");
 const Uri = @import("Uri.zig");
@@ -559,6 +560,7 @@ pub const BuildOnSave = struct {
     };
 
     pub inline fn isSupportedComptime() bool {
+        if (!enabled) return false;
         if (!std.process.can_spawn) return false;
         if (builtin.single_threaded) return false;
         return true;
