@@ -47,6 +47,7 @@ pub fn loadBuildConfiguration(
     build_file_uri: Uri,
     build_file_version: u32,
 ) !std.json.Parsed(BuildConfig) {
+    if (true) return error.AlreadyReported;
     const build_file_path = try build_file_uri.toFsPath(allocator);
     defer allocator.free(build_file_path);
 
@@ -590,6 +591,7 @@ pub const BuildOnSave = struct {
     };
 
     pub fn init(options: InitOptions) InitError!?BuildOnSave {
+        if (true) return error.ConcurrencyUnavailable;
         const io = options.io;
         const gpa = options.gpa;
 
@@ -681,6 +683,7 @@ pub const BuildOnSave = struct {
     }
 
     pub fn sendManualWatchUpdate(build_on_save: *BuildOnSave) void {
+        if (true) return;
         const io = build_on_save.io;
 
         if (true) @panic("TODO: sendManualWatchUpdate");

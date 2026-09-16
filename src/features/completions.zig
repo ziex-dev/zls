@@ -899,7 +899,7 @@ fn completeFileSystemStringLiteral(builder: *Builder, pos_context: Analyser.Posi
     const replace_range = offsets.locToRange(source, replace_loc, builder.server.offset_encoding);
 
     if (pos_context == .import_string_literal) {
-        try builder.completions.ensureUnusedCapacity(builder.arena, 2);
+        try builder.completions.ensureUnusedCapacity(builder.arena, 2 + store.config.modules.len);
         if (store.config.zig_lib_dir) |zig_lib_dir| {
             builder.completions.appendAssumeCapacity(.{
                 .label = "std",
@@ -914,6 +914,14 @@ fn completeFileSystemStringLiteral(builder: *Builder, pos_context: Analyser.Posi
                 .kind = .Module,
                 .detail = builtin_path,
                 .sortText = "2",
+            });
+        }
+        for (store.config.modules) |mod| {
+            builder.completions.appendAssumeCapacity(.{
+                .label = mod.name,
+                .kind = .Module,
+                .detail = mod.path,
+                .sortText = "3",
             });
         }
 
@@ -995,16 +1003,14 @@ fn completeFileSystemStringLiteral(builder: *Builder, pos_context: Analyser.Posi
 
         while (it.next(io)) |opt_entry| {
             const entry = opt_entry orelse break;
-            const expected_extension = switch (pos_context) {
-                .import_string_literal => ".zig",
-                .embedfile_string_literal => null,
-                .string_literal => null,
-                else => unreachable,
-            };
             switch (entry.kind) {
-                .file => if (expected_extension) |expected| {
+                .file => if (pos_context == .import_string_literal) {
                     const actual_extension = std.Io.Dir.path.extension(entry.name);
-                    if (!std.mem.eql(u8, actual_extension, expected)) continue;
+                    if (!std.mem.eql(u8, actual_extension, ".zig") and
+                        !isConfiguredImportExtension(actual_extension, store.config.import_extensions))
+                    {
+                        continue;
+                    }
                 },
                 .directory => {},
                 else => continue,
@@ -1047,11 +1053,36 @@ pub fn @"textDocument/completion"(server: *Server, arena: std.mem.Allocator, req
     var analyser = server.initAnalyser(arena, handle);
     defer analyser.deinit();
 
+    if (try completionAtIndex(server, &analyser, arena, handle, source_index)) |list| {
+        return .{ .completion_list = list };
+    }
+    return null;
+}
+
+fn isConfiguredImportExtension(extension: []const u8, import_extensions: []const []const u8) bool {
+    for (import_extensions) |ext| {
+        if (ext.len == 0) continue;
+        if (ext[0] == '.') {
+            if (std.mem.eql(u8, extension, ext)) return true;
+        } else if (extension.len == ext.len + 1 and extension[0] == '.' and std.mem.eql(u8, extension[1..], ext)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn completionAtIndex(
+    server: *Server,
+    analyser: *Analyser,
+    arena: std.mem.Allocator,
+    handle: *DocumentStore.Handle,
+    source_index: usize,
+) Analyser.Error!?types.completion.List {
     std.debug.assert(source_index <= handle.tree.source.len);
 
     var builder: Builder = .{
         .server = server,
-        .analyser = &analyser,
+        .analyser = analyser,
         .arena = arena,
         .orig_handle = handle,
         .source_index = source_index,
@@ -1064,7 +1095,7 @@ pub fn @"textDocument/completion"(server: *Server, arena: std.mem.Allocator, req
 
     if (line_until_index.len == 0 or std.zig.isValidId(line_until_index)) {
         try populateSnippedCompletions(&builder, .top_level);
-        return .{ .completion_list = .{ .isIncomplete = false, .items = builder.completions.items() } };
+        return .{ .isIncomplete = false, .items = builder.completions.items() };
     }
 
     const pos_context = try Analyser.getPositionContext(arena, &handle.tree, source_index, false);
@@ -1114,7 +1145,7 @@ pub fn @"textDocument/completion"(server: *Server, arena: std.mem.Allocator, req
         }
     }
 
-    return .{ .completion_list = .{ .isIncomplete = false, .items = completions } };
+    return .{ .isIncomplete = false, .items = completions };
 }
 
 // <--------------------------------------------------------------------------->

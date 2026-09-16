@@ -17,6 +17,8 @@ const bsp = @import("bsp.zig");
 
 const DocumentStore = @This();
 
+const zls_config = @import("Config.zig");
+
 io: std.Io,
 allocator: std.mem.Allocator,
 /// the DocumentStore assumes that `config` is not modified while calling one of its functions.
@@ -43,6 +45,8 @@ pub const Config = struct {
     zig_lib_dir: ?std.Build.Cache.Directory,
     builtin_path: ?[]const u8,
     global_cache_dir: ?std.Build.Cache.Directory,
+    import_extensions: []const []const u8 = &.{},
+    modules: []const zls_config.Module = &.{},
     wasi_preopens: switch (builtin.os.tag) {
         .wasi => std.process.Preopens,
         else => void,
@@ -418,6 +422,7 @@ pub const Handle = struct {
             handle.uri,
             &new_tree,
             &new_file_imports,
+            handle.impl.store.config.import_extensions,
         );
 
         const file_imports = try new_file_imports.toOwnedSlice(allocator);
@@ -467,6 +472,7 @@ pub const Handle = struct {
         uri: Uri,
         tree: *const Ast,
         file_imports: *std.ArrayList(Uri),
+        import_extensions: []const []const u8,
     ) error{OutOfMemory}!void {
         const tracy_zone = tracy.trace(@src());
         defer tracy_zone.end();
@@ -498,7 +504,7 @@ pub const Handle = struct {
                 var import_string = offsets.tokenToSlice(tree, tree.nodeMainToken(params[0]));
                 import_string = import_string[1 .. import_string.len - 1];
 
-                if (!std.mem.endsWith(u8, import_string, ".zig")) continue;
+                if (!isFileImport(import_string, import_extensions)) continue;
 
                 const import_uri = try Uri.resolveImport(allocator, uri, parsed_uri, import_string);
                 file_imports.appendAssumeCapacity(import_uri);
@@ -1167,7 +1173,7 @@ fn invalidateBuildFileWorker(self: *DocumentStore, build_file: *BuildFile) std.I
             build_file.uri,
             new_version,
         ) catch |err| switch (err) {
-            error.Canceled => return error.Canceled,
+            // error.Canceled => return error.Canceled,
             else => |e| {
                 if (e != error.AlreadyReported) {
                     log.err("Failed to load build configuration for {s} (error: {})", .{ build_file.uri.raw, e });
@@ -1533,7 +1539,7 @@ pub fn uriFromImportStr(
     const tracy_zone = tracy.trace(@src());
     defer tracy_zone.end();
 
-    if (std.mem.endsWith(u8, import_str, ".zig") or std.mem.endsWith(u8, import_str, ".zon")) {
+    if (isFileImport(import_str, self.config.import_extensions) or std.mem.endsWith(u8, import_str, ".zon")) {
         const parsed_uri = handle.uri.toStdUri();
         return .{ .one = try Uri.resolveImport(allocator, handle.uri, parsed_uri, import_str) };
     }
@@ -1562,6 +1568,12 @@ pub fn uriFromImportStr(
             return .{ .one = try .fromPath(allocator, builtin_path) };
         }
         return .none;
+    }
+
+    for (self.config.modules) |mod| {
+        if (std.mem.eql(u8, import_str, mod.name)) {
+            return .{ .one = try .fromPath(allocator, mod.path) };
+        }
     }
 
     if (!supports_build_system) return .none;
@@ -1604,4 +1616,20 @@ pub fn uriFromImportStr(
             return .{ .one = try .fromPath(allocator, imported_root_source_file) };
         },
     }
+}
+
+fn isFileImport(import_string: []const u8, import_extensions: []const []const u8) bool {
+    if (std.mem.endsWith(u8, import_string, ".zig")) return true;
+    for (import_extensions) |ext| {
+        if (ext.len == 0) continue;
+        if (ext[0] == '.') {
+            if (std.mem.endsWith(u8, import_string, ext)) return true;
+        } else if (import_string.len > ext.len and
+            import_string[import_string.len - ext.len - 1] == '.' and
+            std.mem.endsWith(u8, import_string, ext))
+        {
+            return true;
+        }
+    }
+    return false;
 }

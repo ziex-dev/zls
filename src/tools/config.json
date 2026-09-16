@@ -114,6 +114,18 @@
             "default": true
         },
         {
+            "name": "import_extensions",
+            "description": "",
+            "type": "[]const []const u8",
+            "default": []
+        },
+        {
+            "name": "modules",
+            "description": "",
+            "type": "[]const Module",
+            "default": []
+        },
+        {
             "name": "builtin_path",
             "description": "Override the path to 'builtin' module. Automatically resolved if unset.",
             "type": "?[]const u8",
