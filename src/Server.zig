@@ -1119,6 +1119,8 @@ fn createDocumentStoreConfig(config_manager: *const configuration.Manager) Docum
         .zig_lib_dir = config_manager.zig_lib_dir,
         .builtin_path = config_manager.config.builtin_path,
         .global_cache_dir = config_manager.global_cache_dir,
+        .import_extensions = config_manager.config.import_extensions,
+        .modules = config_manager.config.modules,
         .wasi_preopens = config_manager.wasi_preopens,
     };
 }
