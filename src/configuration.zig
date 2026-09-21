@@ -460,6 +460,13 @@ pub const option = struct {
                     for (val) |str| allocator.free(str);
                     allocator.free(val);
                 },
+                []const Config.Module => {
+                    for (val) |mod| {
+                        allocator.free(mod.name);
+                        allocator.free(mod.path);
+                    }
+                    allocator.free(val);
+                },
                 []const u8 => allocator.free(val),
                 else => comptime unreachable,
             },
@@ -484,6 +491,23 @@ pub const option = struct {
                 for (copy, val) |*duped, original| duped.* = try allocator.dupe(u8, original);
                 return copy;
             },
+            []const Config.Module => {
+                const copy = try allocator.alloc(Config.Module, val.len);
+                @memset(copy, .{ .name = "", .path = "" });
+                errdefer {
+                    for (copy) |mod| {
+                        allocator.free(mod.name);
+                        allocator.free(mod.path);
+                    }
+                    allocator.free(copy);
+                }
+                for (copy, val) |*duped, original| {
+                    duped.name = try allocator.dupe(u8, original.name);
+                    errdefer allocator.free(duped.name);
+                    duped.path = try allocator.dupe(u8, original.path);
+                }
+                return copy;
+            },
             []const u8 => return try allocator.dupe(u8, val),
             else => return val,
         }
@@ -503,6 +527,14 @@ pub const option = struct {
             []const []const u8 => {
                 if (a_val.len != b_val.len) return false;
                 for (a_val, b_val) |a_elem, b_elem| if (!std.mem.eql(u8, a_elem, b_elem)) return false;
+                return true;
+            },
+            []const Config.Module => {
+                if (a_val.len != b_val.len) return false;
+                for (a_val, b_val) |a_elem, b_elem| {
+                    if (!std.mem.eql(u8, a_elem.name, b_elem.name)) return false;
+                    if (!std.mem.eql(u8, a_elem.path, b_elem.path)) return false;
+                }
                 return true;
             },
             []const u8 => return std.mem.eql(u8, a_val, b_val),
