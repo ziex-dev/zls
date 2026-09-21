@@ -590,6 +590,8 @@ pub const BuildOnSave = struct {
     };
 
     pub fn init(options: InitOptions) InitError!?BuildOnSave {
+        // TODO: zxls patches
+        if (true) return error.ConcurrencyUnavailable;
         const io = options.io;
         const gpa = options.gpa;
 
