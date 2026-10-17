@@ -102,6 +102,19 @@
             "type": "boolean",
             "default": true
         },
+        "import_extensions": {
+            "description": "",
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "default": []
+        },
+        "modules": {
+            "description": "",
+            "type": "array",
+            "default": []
+        },
         "builtin_path": {
             "description": "Override the path to 'builtin' module. Automatically resolved if unset.",
             "type": "string",

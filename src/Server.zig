@@ -1111,6 +1111,8 @@ fn createDocumentStoreConfig(config_manager: *const configuration.Manager) Docum
         .builtin_path = config_manager.config.builtin_path,
         .global_cache_dir = config_manager.global_cache_dir,
         .preopens = config_manager.preopens,
+        .import_extensions = config_manager.config.import_extensions,
+        .modules = config_manager.config.modules,
     };
 }
 
