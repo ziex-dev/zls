@@ -7,6 +7,7 @@
 const std = @import("std");
 const Ast = std.zig.Ast;
 const expectEqualStrings = @import("testing.zig").expectEqualStrings;
+const ast = @import("ast.zig");
 
 pub const RenderOptions = struct {
     indent: usize = 4,
@@ -301,7 +302,7 @@ const PrintAst = struct {
             .ptr_type,
             .ptr_type_bit_range,
             => {
-                const pointer_type = tree.fullPtrType(node).?;
+                const pointer_type = ast.fullPtrType(tree, node).?;
                 try p.renderCustomField("{t}", .{pointer_type.size}, "size");
                 try p.renderOptTokenField(pointer_type.allowzero_token, "allowzero_token", .hide_if_none);
                 try p.renderOptTokenField(pointer_type.const_token, "const_token", .hide_if_none);
@@ -382,7 +383,7 @@ const PrintAst = struct {
             .while_cont,
             .@"while",
             => {
-                const while_data = tree.fullWhile(node).?;
+                const while_data = ast.fullWhile(tree, node).?;
                 try p.renderField(while_data.ast.cond_expr, "cond_expr");
                 try p.renderOptField(while_data.ast.cont_expr, "cont_expr", .hide_if_none);
                 try p.renderField(while_data.ast.then_expr, "then_expr");
@@ -391,7 +392,7 @@ const PrintAst = struct {
             .for_simple,
             .@"for",
             => {
-                const for_data = tree.fullFor(node).?;
+                const for_data = ast.fullFor(tree, node).?;
                 try p.renderNodeSliceField(for_data.ast.inputs, "inputs");
                 try p.renderField(for_data.ast.then_expr, "then_expr");
                 try p.renderOptField(for_data.ast.else_expr, "else_expr", .hide_if_none);
@@ -399,7 +400,7 @@ const PrintAst = struct {
             .if_simple,
             .@"if",
             => {
-                const if_data = tree.fullIf(node).?;
+                const if_data = ast.fullIf(tree, node).?;
                 try p.renderField(if_data.ast.cond_expr, "cond_expr");
                 try p.renderField(if_data.ast.then_expr, "then_expr");
                 try p.renderOptField(if_data.ast.else_expr, "else_expr", .hide_if_none);
@@ -487,7 +488,7 @@ const PrintAst = struct {
             .asm_simple,
             .@"asm",
             => {
-                const asm_data = tree.fullAsm(node).?;
+                const asm_data = ast.fullAsm(tree, node).?;
                 try p.renderOptTokenField(asm_data.volatile_token, "volatile_token", .hide_if_none);
                 try p.renderField(asm_data.ast.template, "template");
                 try p.renderNodeSliceField(asm_data.inputs, "inputs");
@@ -867,6 +868,14 @@ pub fn main(init: std.process.Init) !u8 {
     });
     defer tree.deinit(gpa);
 
+    if (tree.errors.len > 0) {
+        const format_error: FormatAstError = .{
+            .parse_error = tree.errors[0],
+            .tree = &tree,
+        };
+        std.log.err("{f}", .{format_error});
+    }
+
     try renderToFile(
         &tree,
         io,
@@ -947,3 +956,15 @@ test PrintAst {
 
     try std.testing.expectEqual(0, printed_tree.errors.len);
 }
+
+const FormatAstError = struct {
+    parse_error: Ast.Error,
+    tree: *const Ast,
+
+    pub fn format(
+        ctx: FormatAstError,
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try ctx.tree.renderError(ctx.parse_error, writer);
+    }
+};
