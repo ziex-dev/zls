@@ -322,6 +322,7 @@ pub const Handle = struct {
             switch (result.*) {
                 .none, .unresolved => {},
                 .resolved => |root_source_files| {
+                    for (root_source_files) |file| allocator.free(file);
                     allocator.free(root_source_files);
                 },
             }
@@ -367,6 +368,7 @@ pub const Handle = struct {
 
         var results: std.ArrayList([]const u8) = .empty;
         defer results.deinit(allocator);
+        errdefer for (results.items) |mod| allocator.free(mod);
 
         // Do a graph search from root modules until we reach `root_source_file`
         for (root_modules.keys()) |root_module| {
@@ -376,7 +378,8 @@ pub const Handle = struct {
 
             while (queue.pop()) |index| {
                 if (index == target_index) {
-                    try results.append(allocator, root_module);
+                    try results.ensureUnusedCapacity(allocator, 1);
+                    results.appendAssumeCapacity(try allocator.dupe(u8, root_module));
                     break;
                 }
 
@@ -898,7 +901,7 @@ pub fn refreshDocumentFromFileSystem(self: *DocumentStore, uri: Uri, should_dele
         if (self.getHandle(uri)) |handle| {
             if (handle.lsp_synced) return false;
         } else return false;
-        if (uri.isFileScheme()) return false;
+        if (!uri.isFileScheme()) return false;
         _ = self.createAndStoreDocument(
             uri,
             .uri,
@@ -1184,6 +1187,10 @@ fn invalidateBuildFileWorker(self: *DocumentStore, build_file: *BuildFile) std.I
             .diagnostics = self.diagnostics_collection,
             .build_file_uri = build_file.uri,
             .build_file_version = new_version,
+            .build_options = if (build_file.build_associated_config) |build_config|
+                build_config.value.build_options orelse &.{}
+            else
+                &.{},
         };
 
         var build_config = bsp.loadBuildConfiguration(
